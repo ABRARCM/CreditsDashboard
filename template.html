@@ -119,15 +119,20 @@ th.sortable.sort-desc::after{content:'▼';opacity:.85;color:var(--green-700);}
 .summary-pill{display:inline-block;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600;background:var(--green-100);color:var(--green-800);}
 .summary-pill.amber{background:#fef3c7;color:#92400e;}
 .summary-pill.coral{background:#fee2e2;color:#991b1b;}
-.login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,var(--green-400),var(--green-200));display:flex;align-items:center;justify-content:center;z-index:9999;}
-.login-card{background:#fff;border-radius:14px;padding:36px 40px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:380px;}
-.login-card img{height:50px;margin-bottom:16px;}
-.login-card h2{font-size:20px;color:var(--green-800);margin-bottom:6px;}
-.login-card p{font-size:13px;color:var(--muted);margin-bottom:18px;}
-.login-card input{font-family:'Poppins',sans-serif;width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:14px;text-align:center;}
-.login-card button{font-family:'Poppins',sans-serif;width:100%;padding:11px;border:none;border-radius:8px;background:var(--green-600);color:#fff;font-size:14px;font-weight:600;cursor:pointer;}
-.login-card button:hover{background:var(--green-700);}
-.login-err{color:var(--coral);font-size:12px;height:14px;margin-bottom:8px;}
+.login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,var(--green-700) 0%,var(--green-500) 50%,var(--green-300) 100%);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;}
+.login-card{background:#fff;border-radius:24px;padding:48px 40px;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,.3);max-width:440px;width:100%;}
+.login-card img{width:200px;margin-bottom:14px;}
+.login-card .login-subtitle{font-size:14px;color:#64748b;margin-bottom:8px;font-weight:500;letter-spacing:2px;text-transform:uppercase;}
+.login-card h2{font-size:28px;font-weight:800;color:var(--green-800);margin-bottom:8px;}
+.login-card p{font-size:15px;color:#64748b;margin-bottom:32px;}
+.login-input-group{position:relative;margin-bottom:20px;}
+.login-input-group svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:20px;height:20px;fill:#64748b;}
+.login-card input{font-family:'Poppins',sans-serif;width:100%;padding:16px 16px 16px 48px;border:2px solid #e2e8f0;border-radius:12px;font-size:16px;outline:none;transition:border-color .2s;}
+.login-card input:focus{border-color:var(--green-500);}
+.login-card button{font-family:'Poppins',sans-serif;width:100%;padding:16px;background:linear-gradient(135deg,var(--green-700),var(--green-500));color:#fff;border:none;border-radius:12px;font-size:17px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:transform .2s,box-shadow .2s;}
+.login-card button:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(22,163,74,.4);}
+.login-err{color:var(--coral);font-size:14px;font-weight:600;height:18px;margin-top:12px;}
+.login-footer{margin-top:24px;font-size:12px;color:#94a3b8;}
 .empty-state{padding:50px 20px;text-align:center;color:var(--muted);}
 .empty-state h3{font-size:20px;color:var(--green-700);margin-bottom:8px;}
 .firebase-status{position:fixed;bottom:14px;right:14px;background:#fff;border:1px solid var(--green-200);border-radius:20px;padding:6px 14px;font-size:11px;color:var(--green-700);box-shadow:0 2px 8px rgba(0,0,0,.08);font-weight:600;z-index:500;}
@@ -142,12 +147,19 @@ th.sortable.sort-desc::after{content:'▼';opacity:.85;color:var(--green-700);}
 <!-- LOGIN -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-card">
-    <img src="https://abrahealthgroup.com/wp-content/uploads/2022/09/Asset-48@4x-copy.png" alt="Abra">
-    <h2>Aged Credits Dashboard</h2>
-    <p>RCM team access</p>
-    <input id="loginPw" type="password" placeholder="Password">
+    <img src="https://abrahealthgroup.com/wp-content/uploads/2022/09/Asset-48@4x-copy.png" alt="Abra Health Group">
+    <div class="login-subtitle">RCM Team Portal</div>
+    <h2>Aged Credits</h2>
+    <p>Enter password to access the dashboard</p>
+    <form onsubmit="event.preventDefault(); tryLogin();">
+      <div class="login-input-group">
+        <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>
+        <input id="loginPw" type="password" placeholder="Enter password" autofocus>
+      </div>
+      <button type="submit">Access Dashboard</button>
+    </form>
     <div class="login-err" id="loginErr"></div>
-    <button onclick="tryLogin()">Sign in</button>
+    <div class="login-footer">Abra Health Group &mdash; Confidential</div>
   </div>
 </div>
 
