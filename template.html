@@ -283,6 +283,19 @@ function inCooldown(rowKey, field){
   return t && (Date.now() - t) < SYNC_COOLDOWN_MS;
 }
 
+// Debounced Firebase writes for free-text fields (remarks). Lets the user type
+// continuously while keeping Firebase noise bounded; also persists partial text
+// before blur, so closing the tab or changing a filter mid-typing doesn't lose it.
+const writeDebouncers = {};
+function debounceWrite(k, f, v, ms=600){
+  const key = `${k}:${f}`;
+  if (writeDebouncers[key]) clearTimeout(writeDebouncers[key]);
+  writeDebouncers[key] = setTimeout(()=>{
+    writeField(k, f, v);
+    delete writeDebouncers[key];
+  }, ms);
+}
+
 // Stable Firebase keys: PatNum + State. (Never include filtered-array index.)
 function rowKey(rec){
   return `${rec.State}_${rec.PatNum}`;
@@ -454,6 +467,47 @@ const stateView = {
 };
 const PAGE_SIZE = 100;
 
+// ----- Filter persistence (sessionStorage, matches PA OIC pattern) -----
+function filterStorageKey(state){ return `credits-filters-${state}`; }
+function saveFilterState(state){
+  try {
+    const sv = stateView[state];
+    const payload = {
+      search: document.getElementById(`${state}_qSearch`)?.value || '',
+      status: document.getElementById(`${state}_qStatus`)?.value || '',
+      assigned: document.getElementById(`${state}_qAssigned`)?.value || '',
+      action: document.getElementById(`${state}_qAction`)?.value || '',
+      buckets: getMsValues(`${state}_msBucket`),
+      clinics: getMsValues(`${state}_msClinic`),
+      sort: sv.sort,
+      page: sv.page,
+    };
+    sessionStorage.setItem(filterStorageKey(state), JSON.stringify(payload));
+  } catch(e) {}
+}
+function restoreFilterState(state){
+  let payload;
+  try { payload = JSON.parse(sessionStorage.getItem(filterStorageKey(state)) || 'null'); } catch(e){ payload = null; }
+  if (!payload) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+  set(`${state}_qSearch`, payload.search);
+  set(`${state}_qStatus`, payload.status);
+  set(`${state}_qAssigned`, payload.assigned);
+  set(`${state}_qAction`, payload.action);
+  (payload.buckets||[]).forEach(b => {
+    const cb = document.querySelector(`#${state}_msBucket_drop input[type=checkbox][value="${CSS.escape(b)}"]`);
+    if (cb) cb.checked = true;
+  });
+  (payload.clinics||[]).forEach(c => {
+    const cb = document.querySelector(`#${state}_msClinic_drop input[type=checkbox][value="${CSS.escape(c)}"]`);
+    if (cb) cb.checked = true;
+  });
+  updateMsCount(`${state}_msBucket`);
+  updateMsCount(`${state}_msClinic`);
+  if (payload.sort) stateView[state].sort = payload.sort;
+  if (payload.page) stateView[state].page = payload.page;
+}
+
 function buildStateTab(state){
   const root = document.getElementById('tab-'+state.toLowerCase());
   const recs = D.states[state] || [];
@@ -522,14 +576,14 @@ function buildStateTab(state){
   `;
 
   // build multi-selects
-  buildMultiSelect(`${state}_msBucket`, 'Aging buckets', BUCKETS, ()=>applyFilters(state));
-  buildMultiSelect(`${state}_msClinic`, 'Clinics', clinics, ()=>applyFilters(state));
+  buildMultiSelect(`${state}_msBucket`, 'Aging buckets', BUCKETS, ()=>{ saveFilterState(state); applyFilters(state); });
+  buildMultiSelect(`${state}_msClinic`, 'Clinics', clinics, ()=>{ saveFilterState(state); applyFilters(state); });
 
-  // wire filters
-  document.getElementById(`${state}_qSearch`).addEventListener('input', ()=>applyFilters(state));
-  document.getElementById(`${state}_qStatus`).addEventListener('change', ()=>applyFilters(state));
-  document.getElementById(`${state}_qAssigned`).addEventListener('change', ()=>applyFilters(state));
-  document.getElementById(`${state}_qAction`).addEventListener('change', ()=>applyFilters(state));
+  // wire filters (persist + apply)
+  document.getElementById(`${state}_qSearch`).addEventListener('input', ()=>{ saveFilterState(state); applyFilters(state); });
+  document.getElementById(`${state}_qStatus`).addEventListener('change', ()=>{ saveFilterState(state); applyFilters(state); });
+  document.getElementById(`${state}_qAssigned`).addEventListener('change', ()=>{ saveFilterState(state); applyFilters(state); });
+  document.getElementById(`${state}_qAction`).addEventListener('change', ()=>{ saveFilterState(state); applyFilters(state); });
 
   // sort headers
   document.querySelectorAll(`#${state}_table th.sortable`).forEach(th=>{
@@ -543,10 +597,13 @@ function buildStateTab(state){
         sv.sort.dir = (col === 'BalTotal' || col.startsWith('Bal_') || col === 'OldestBucket') ? 'asc' : 'asc';
       }
       sv.page = 1;
+      saveFilterState(state);
       applyFilters(state);
     });
   });
 
+  // Restore filters from prior session (page reload, tab close+reopen)
+  restoreFilterState(state);
   applyFilters(state);
 }
 
@@ -610,6 +667,7 @@ function clearFilters(state){
   document.querySelectorAll(`#${state}_msClinic_drop input[type=checkbox]`).forEach(cb=>cb.checked=false);
   updateMsCount(`${state}_msBucket`);
   updateMsCount(`${state}_msClinic`);
+  saveFilterState(state);
   applyFilters(state);
 }
 
@@ -748,12 +806,13 @@ function renderStateTable(state){
   tbody.querySelectorAll('[data-k][data-f]').forEach(el=>{
     el.addEventListener('focus', ()=> markInteract(el.dataset.k, el.dataset.f));
     el.addEventListener('mousedown', ()=> markInteract(el.dataset.k, el.dataset.f));
-    const handler = ()=>{
+    const commit = (immediate)=>{
       const k = el.dataset.k, f = el.dataset.f;
       const v = el.value;
       STATE_OVERLAY[k] = STATE_OVERLAY[k] || {};
       STATE_OVERLAY[k][f] = v;
-      writeField(k, f, v);
+      if (immediate) writeField(k, f, v);
+      else debounceWrite(k, f, v, 600);
       if (f === 'status'){
         const row = el.closest('tr');
         row.classList.remove('row-completed','row-inprogress');
@@ -767,9 +826,21 @@ function renderStateTable(state){
         el.classList.toggle('has-text', !!v);
       }
     };
-    el.addEventListener('change', handler);
+    // selects / date pickers: 'change' fires only on commit -> write immediately
+    el.addEventListener('change', ()=> commit(true));
     if (el.tagName === 'INPUT' && el.type === 'text'){
-      el.addEventListener('blur', handler);
+      // text inputs (remarks): mirror to STATE_OVERLAY on every keystroke,
+      // refresh the cooldown so concurrent Firebase echoes don't clobber the
+      // partial text, and write to Firebase debounced. Blur force-flushes.
+      el.addEventListener('input', ()=>{
+        markInteract(el.dataset.k, el.dataset.f);
+        commit(false);
+      });
+      el.addEventListener('blur', ()=>{
+        const key = `${el.dataset.k}:${el.dataset.f}`;
+        if (writeDebouncers[key]){ clearTimeout(writeDebouncers[key]); delete writeDebouncers[key]; }
+        commit(true);
+      });
     }
   });
 
@@ -784,6 +855,7 @@ function movePage(state, delta){
   const sv = stateView[state];
   const totalPages = Math.max(1, Math.ceil(sv.filtered.length / PAGE_SIZE));
   sv.page = Math.max(1, Math.min(totalPages, sv.page + delta));
+  saveFilterState(state);
   renderStateTable(state);
   document.querySelector(`#tab-${state.toLowerCase()} .table-scroll`).scrollTop = 0;
 }
@@ -808,12 +880,21 @@ function writeField(k, field, value){
 function subscribeFirebase(){
   if (!db) return;
   db.ref('credits').on('value', snap=>{
+    // CRITICAL: this listener must NEVER re-render the table body or rebuild
+    // the filter bar. Re-rendering kills in-progress text selection (breaking
+    // copy-to-clipboard) and clobbers partial typing in remarks. Update stat
+    // tiles only — see feedback_dashboard_no_rerender_on_sync.
     const val = snap.val() || {};
     Object.entries(val).forEach(([k, fields])=>{
       STATE_OVERLAY[k] = STATE_OVERLAY[k] || {};
       Object.entries(fields||{}).forEach(([f, v])=>{
-        // honor cooldown: don't overwrite a field the user is actively editing
+        // honor cooldown: don't overwrite a field the user is actively editing.
+        // Cooldown refreshes on every keystroke (markInteract on 'input') so
+        // a slow typist's partial remarks are never overwritten by an echo.
         if (inCooldown(k, f)) return;
+        // Also skip if a pending debounced write is queued for this field
+        // (we'd be racing our own outbound write).
+        if (writeDebouncers[`${k}:${f}`]) return;
         STATE_OVERLAY[k][f] = v;
         // patch DOM if rendered
         const el = document.querySelector(`[data-k="${CSS.escape(k)}"][data-f="${f}"]`);
