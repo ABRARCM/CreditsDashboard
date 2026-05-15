@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aged Credits Dashboard — Abra Health Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<style>
+:root {
+  --green-50:#f0fdf4; --green-100:#dcfce7; --green-200:#bbf7d0; --green-300:#86efac;
+  --green-400:#4ade80; --green-500:#22c55e; --green-600:#16a34a; --green-700:#15803d;
+  --green-800:#166534; --green-900:#14532d;
+  --bg:#f5fbf6; --card:#ffffff; --text:#1f2937; --muted:#64748b; --border:#e2e8f0;
+  --coral:#FF6B6B; --warm:#FF9F43; --amber:#FFD93D;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Poppins',sans-serif;background:var(--bg);color:var(--text);font-size:15px;}
+.header{background:linear-gradient(135deg,var(--green-700),var(--green-500));color:#fff;padding:18px 32px;display:flex;align-items:center;gap:18px;}
+.header img{height:46px;}
+.header h1{font-size:24px;font-weight:700;}
+.header .subtitle{font-size:13px;opacity:.85;margin-top:2px;}
+.header .as-of{margin-left:auto;font-size:13px;background:rgba(255,255,255,.18);padding:6px 14px;border-radius:8px;}
+.tab-bar{display:flex;background:#fff;border-bottom:2px solid var(--border);padding:0 24px;position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.tab-btn{padding:14px 22px;font-family:'Poppins',sans-serif;font-size:15px;font-weight:500;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;transition:all .2s;}
+.tab-btn:hover{color:var(--green-700);}
+.tab-btn.active{color:var(--green-700);border-bottom-color:var(--green-600);font-weight:600;}
+.tab-btn .pill{display:inline-block;font-size:11px;background:var(--green-100);color:var(--green-700);padding:2px 8px;border-radius:10px;margin-left:6px;font-weight:600;}
+.tab-content{display:none;padding:22px 32px;max-width:1700px;margin:0 auto;}
+.tab-content.active{display:block;}
+.card{background:var(--card);border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:18px;border:1px solid var(--green-100);}
+.card h3{font-size:17px;font-weight:600;margin-bottom:14px;color:var(--green-800);}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:18px;}
+.kpi{background:var(--card);border-radius:12px;padding:18px 22px;box-shadow:0 1px 3px rgba(0,0,0,.06);text-align:center;border-top:4px solid var(--green-500);}
+.kpi .label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+.kpi .value{font-size:30px;font-weight:700;color:var(--green-800);margin:6px 0 2px;}
+.kpi .sub{font-size:12px;color:var(--muted);}
+.kpi.coral{border-top-color:var(--coral);} .kpi.coral .value{color:var(--coral);}
+.kpi.warm{border-top-color:var(--warm);} .kpi.warm .value{color:var(--warm);}
+.kpi.dark{border-top-color:var(--green-800);} .kpi.dark .value{color:var(--green-900);}
+.kpi .change{font-size:12px;font-weight:600;margin-top:4px;}
+.kpi .change.up{color:var(--coral);}
+.kpi .change.down{color:var(--green-600);}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+@media (max-width:1100px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;}
+th{text-align:left;padding:9px 10px;background:var(--green-50);font-weight:600;color:var(--green-800);font-size:12px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:5;box-shadow:inset 0 -2px 0 var(--green-200);background-clip:padding-box;}
+td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:hover{background:#f7fdf8;}
+.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;}
+.neg{color:var(--coral);}
+.bucket-cell{font-variant-numeric:tabular-nums;text-align:right;}
+.bucket-cell.aged{color:var(--coral);font-weight:600;}
+.chart-wrap{position:relative;height:300px;}
+.chart-wrap.tall{height:420px;}
+.filter-bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;padding:14px;background:var(--green-50);border-radius:10px;border:1px solid var(--green-100);}
+.filter-bar select,.filter-bar input{font-family:'Poppins',sans-serif;padding:7px 12px;border:1px solid var(--green-200);border-radius:8px;font-size:13px;background:#fff;}
+.filter-bar label{font-size:12px;font-weight:600;color:var(--green-800);text-transform:uppercase;letter-spacing:.3px;}
+.filter-bar input[type="text"]{width:200px;}
+.btn-clear{font-family:'Poppins',sans-serif;padding:7px 14px;border:1px solid var(--green-300);border-radius:8px;background:#fff;cursor:pointer;font-size:12px;color:var(--green-700);font-weight:600;}
+.btn-clear:hover{background:var(--green-100);}
+.multi-select{position:relative;display:inline-block;min-width:170px;}
+.multi-select .ms-toggle{font-family:'Poppins',sans-serif;padding:7px 12px;border:1px solid var(--green-200);border-radius:8px;font-size:13px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px;white-space:nowrap;min-height:34px;}
+.multi-select .ms-toggle:hover{border-color:var(--green-500);}
+.multi-select .ms-toggle .ms-count{background:var(--green-600);color:#fff;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;}
+.multi-select .ms-dropdown{display:none;position:absolute;top:100%;left:0;min-width:100%;max-height:320px;overflow-y:auto;background:#fff;border:1px solid var(--green-200);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;margin-top:4px;}
+.multi-select .ms-dropdown.open{display:block;}
+.multi-select .ms-search{width:100%;padding:8px 10px;border:none;border-bottom:1px solid var(--border);font-family:'Poppins',sans-serif;font-size:12px;outline:none;}
+.multi-select .ms-actions{display:flex;border-bottom:1px solid var(--border);}
+.multi-select .ms-actions button{flex:1;padding:6px;border:none;background:none;font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;color:var(--green-700);cursor:pointer;}
+.multi-select .ms-actions button:hover{background:var(--green-50);}
+.multi-select .ms-option{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;}
+.multi-select .ms-option:hover{background:var(--green-50);}
+.multi-select .ms-option input{accent-color:var(--green-600);}
+.multi-select .ms-option.hidden{display:none;}
+th.sortable{cursor:pointer;user-select:none;padding-right:20px !important;}  /* keep th's position:sticky from the base rule; absolute ::after still anchors to a sticky parent */
+th.sortable:hover{background:var(--green-100);}
+th.sortable::after{content:'⇅';position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:11px;opacity:.35;}
+th.sortable.sort-asc::after{content:'▲';opacity:.85;color:var(--green-700);}
+th.sortable.sort-desc::after{content:'▼';opacity:.85;color:var(--green-700);}
+.row-completed{background:#e7fbef !important;}
+.row-completed td{color:#166534 !important;}
+.row-inprogress{background:#fff8e1 !important;}
+.status-select,.action-select,.staff-select{font-family:'Poppins',sans-serif;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff;width:100%;}
+.status-select.completed{background:var(--green-500);color:#fff;font-weight:600;border-color:var(--green-600);}
+.status-select.inprogress{background:var(--amber);color:#333;font-weight:600;border-color:var(--warm);}
+.remarks-input,.date-input{font-family:'Poppins',sans-serif;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff;width:100%;}
+.remarks-input.has-text{border-color:var(--green-500);background:var(--green-50);}
+.pager{display:flex;align-items:center;gap:10px;margin-top:12px;justify-content:center;flex-wrap:wrap;}
+.pager button{font-family:'Poppins',sans-serif;padding:6px 14px;border:1px solid var(--green-300);border-radius:8px;background:#fff;cursor:pointer;font-size:12px;color:var(--green-700);font-weight:600;}
+.pager button:hover:not(:disabled){background:var(--green-100);}
+.pager button:disabled{opacity:.4;cursor:default;}
+.pager span{font-size:12px;color:var(--muted);}
+.table-scroll{max-height:680px;overflow:auto;border:1px solid var(--green-100);border-radius:8px;}
+.bucket-bar{display:flex;height:30px;border-radius:6px;overflow:hidden;background:#e2e8f0;margin-bottom:10px;}
+.bucket-bar .seg{height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;}
+
+/* Progress-by-region card */
+.region-prog{background:var(--green-50);border:1px solid var(--green-100);border-radius:10px;padding:16px 18px;}
+.region-prog .rp-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+.region-prog .rp-state{font-size:18px;font-weight:700;color:var(--green-800);}
+.region-prog .rp-total{font-size:13px;color:var(--muted);font-weight:600;}
+.region-prog .rp-bar{display:flex;height:22px;border-radius:6px;overflow:hidden;background:#e2e8f0;margin-bottom:12px;}
+.region-prog .rp-bar .seg{height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;transition:width .3s ease;}
+.region-prog .rp-bar .seg.done{background:var(--green-600);}
+.region-prog .rp-bar .seg.prog{background:var(--amber);color:#333;}
+.region-prog .rp-bar .seg.left{background:#cbd5e1;color:#475569;}
+.region-prog .rp-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;}
+.region-prog .rp-stat{text-align:center;padding:6px 4px;border-radius:6px;background:#fff;}
+.region-prog .rp-stat .v{font-weight:700;font-size:15px;display:block;line-height:1.2;}
+.region-prog .rp-stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:600;letter-spacing:.3px;margin-top:2px;display:block;}
+.region-prog .rp-stat.done .v{color:var(--green-700);}
+.region-prog .rp-stat.prog .v{color:#d97706;}
+.region-prog .rp-stat.left .v{color:var(--coral);}
+.region-prog .rp-pct{font-size:11px;color:var(--muted);text-align:center;margin-top:8px;}
+.summary-pill{display:inline-block;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600;background:var(--green-100);color:var(--green-800);}
+.summary-pill.amber{background:#fef3c7;color:#92400e;}
+.summary-pill.coral{background:#fee2e2;color:#991b1b;}
+.login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,var(--green-700),var(--green-500));display:flex;align-items:center;justify-content:center;z-index:9999;}
+.login-card{background:#fff;border-radius:14px;padding:36px 40px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:380px;}
+.login-card img{height:50px;margin-bottom:16px;}
+.login-card h2{font-size:20px;color:var(--green-800);margin-bottom:6px;}
+.login-card p{font-size:13px;color:var(--muted);margin-bottom:18px;}
+.login-card input{font-family:'Poppins',sans-serif;width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:14px;text-align:center;}
+.login-card button{font-family:'Poppins',sans-serif;width:100%;padding:11px;border:none;border-radius:8px;background:var(--green-600);color:#fff;font-size:14px;font-weight:600;cursor:pointer;}
+.login-card button:hover{background:var(--green-700);}
+.login-err{color:var(--coral);font-size:12px;height:14px;margin-bottom:8px;}
+.empty-state{padding:50px 20px;text-align:center;color:var(--muted);}
+.empty-state h3{font-size:20px;color:var(--green-700);margin-bottom:8px;}
+.firebase-status{position:fixed;bottom:14px;right:14px;background:#fff;border:1px solid var(--green-200);border-radius:20px;padding:6px 14px;font-size:11px;color:var(--green-700);box-shadow:0 2px 8px rgba(0,0,0,.08);font-weight:600;z-index:500;}
+.firebase-status.synced::before{content:'●';color:var(--green-500);margin-right:6px;}
+.firebase-status.error{color:var(--coral);border-color:var(--coral);}
+.firebase-status.error::before{content:'●';color:var(--coral);margin-right:6px;}
+</style>
+<script>const EMBEDDED_DATA = __DATA_PLACEHOLDER__;</script>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <img src="https://abrahealthgroup.com/wp-content/uploads/2022/09/Asset-48@4x-copy.png" alt="Abra">
+    <h2>Aged Credits Dashboard</h2>
+    <p>RCM team access</p>
+    <input id="loginPw" type="password" placeholder="Password">
+    <div class="login-err" id="loginErr"></div>
+    <button onclick="tryLogin()">Sign in</button>
+  </div>
+</div>
+
+<div class="header">
+  <img src="https://abrahealthgroup.com/wp-content/uploads/2022/09/Asset-48@4x-copy.png" alt="Abra">
+  <div>
+    <h1>Aged Credits Dashboard</h1>
+    <div class="subtitle">Refund &amp; credit resolution tracker — RCM</div>
+  </div>
+  <div class="as-of">As of <span id="asOf"></span></div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" data-tab="ov">Overview</button>
+  <button class="tab-btn" data-tab="pa">Pennsylvania <span class="pill" id="paPill">0</span></button>
+  <button class="tab-btn" data-tab="nj">New Jersey <span class="pill" id="njPill">0</span></button>
+  <button class="tab-btn" data-tab="ct">Connecticut <span class="pill" id="ctPill">0</span></button>
+</div>
+
+<!-- ===== OVERVIEW ===== -->
+<div class="tab-content active" id="tab-ov">
+
+  <div class="kpi-row">
+    <div class="kpi dark"><div class="label">Total Aged Credits</div><div class="value" id="ovTotalCredit">$0</div><div class="sub" id="ovTotalCount">0 accounts</div><div class="change" id="ovMomTotal"></div></div>
+    <div class="kpi"><div class="label">PA</div><div class="value" id="ovPaTotal">$0</div><div class="sub" id="ovPaCount">0 accounts</div><div class="change" id="ovMomPa"></div></div>
+    <div class="kpi"><div class="label">NJ</div><div class="value" id="ovNjTotal">$0</div><div class="sub" id="ovNjCount">0 accounts</div><div class="change" id="ovMomNj"></div></div>
+    <div class="kpi"><div class="label">CT</div><div class="value" id="ovCtTotal">$0</div><div class="sub" id="ovCtCount">0 accounts</div><div class="change" id="ovMomCt"></div></div>
+    <div class="kpi coral"><div class="label">Aged &gt; 1 Year</div><div class="value" id="ovOldTotal">$0</div><div class="sub" id="ovOldPct">0% of total</div></div>
+    <div class="kpi warm"><div class="label">Completed (Worked)</div><div class="value" id="ovCompleted">0</div><div class="sub" id="ovCompletedPct">0% of accounts</div></div>
+  </div>
+
+  <div class="card">
+    <h3>Progress by region — $ worked vs remaining</h3>
+    <div id="ovProgressGrid" class="grid-3"></div>
+  </div>
+
+  <div class="card">
+    <h3>Aging buckets — all locations</h3>
+    <div class="bucket-bar" id="ovBucketBar"></div>
+    <div class="chart-wrap"><canvas id="ovBucketChart"></canvas></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>By state</h3>
+      <div class="chart-wrap"><canvas id="ovStateChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Month-over-month</h3>
+      <div id="ovMomCard"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Top clinics by aged credit</h3>
+    <div class="table-scroll" style="max-height:520px;">
+      <table id="ovClinicTable">
+        <thead>
+          <tr>
+            <th class="rank">#</th>
+            <th>Clinic</th>
+            <th>State</th>
+            <th class="num">Accounts</th>
+            <th class="num">Total Credit</th>
+            <th class="num">0-90</th>
+            <th class="num">91-365</th>
+            <th class="num">1-3 yrs</th>
+            <th class="num">4+ yrs</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STATE TABS (PA / NJ / CT share layout) ===== -->
+<div class="tab-content" id="tab-pa"></div>
+<div class="tab-content" id="tab-nj"></div>
+<div class="tab-content" id="tab-ct"></div>
+
+<div class="firebase-status" id="fbStatus">Connecting…</div>
+
+<script>
+// ============= AUTH =============
+const PASSWORD = 'Credits2026';
+function tryLogin(){
+  const v = document.getElementById('loginPw').value.trim();
+  if (v === PASSWORD){
+    sessionStorage.setItem('credits_auth','1');
+    document.getElementById('loginOverlay').style.display='none';
+    boot();
+  } else {
+    document.getElementById('loginErr').textContent = 'Incorrect password';
+  }
+}
+document.getElementById('loginPw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
+if (sessionStorage.getItem('credits_auth')==='1'){
+  document.getElementById('loginOverlay').style.display='none';
+}
+
+// ============= FIREBASE =============
+// TODO: replace with the credits-abra project URL once created in Firebase console.
+const firebaseConfig = {
+  databaseURL: 'https://credits-abra-default-rtdb.firebaseio.com'
+};
+let db = null;
+let fbReady = false;
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  fbReady = true;
+  setFbStatus('synced','Synced');
+} catch(e){
+  setFbStatus('error','Offline');
+  console.warn('Firebase init failed', e);
+}
+function setFbStatus(cls, text){
+  const el = document.getElementById('fbStatus');
+  if (!el) return;
+  el.className = 'firebase-status ' + cls;
+  el.textContent = text;
+}
+
+// Concurrent-safe sync: scoped per-field, 4s interaction cooldown.
+const SYNC_COOLDOWN_MS = 4000;
+const lastInteractAt = {};   // key: rowKey:field
+function markInteract(rowKey, field){
+  lastInteractAt[`${rowKey}:${field}`] = Date.now();
+}
+function inCooldown(rowKey, field){
+  const t = lastInteractAt[`${rowKey}:${field}`];
+  return t && (Date.now() - t) < SYNC_COOLDOWN_MS;
+}
+
+// Stable Firebase keys: PatNum + State. (Never include filtered-array index.)
+function rowKey(rec){
+  return `${rec.State}_${rec.PatNum}`;
+}
+
+// ============= STATE =============
+const D = EMBEDDED_DATA;
+const BUCKETS = D.buckets;
+const STATE_OVERLAY = {};  // {rowKey: {status, assigned, action, dateWorked, remarks}}
+
+document.getElementById('asOf').textContent = D.asOf;
+document.getElementById('paPill').textContent = D.states.PA.length.toLocaleString();
+document.getElementById('njPill').textContent = D.states.NJ.length.toLocaleString();
+document.getElementById('ctPill').textContent = D.states.CT.length.toLocaleString();
+
+// ============= HELPERS =============
+const fmtMoney = v => (v<0?'-':'') + '$' + Math.abs(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtMoneyShort = v => { const a=Math.abs(v); if(a>=1e6) return (v<0?'-':'')+'$'+(a/1e6).toFixed(2)+'M'; if(a>=1e3) return (v<0?'-':'')+'$'+(a/1e3).toFixed(1)+'K'; return fmtMoney(v); };
+const fmtNum = v => Number(v||0).toLocaleString();
+const AGED_BUCKETS = ['1-3 yrs','4+ yrs'];
+function aboveOneYearSum(buckets){ return AGED_BUCKETS.reduce((a,b)=>a+(buckets[b]||0),0); }
+
+// ============= OVERVIEW =============
+function renderOverview(){
+  const ov = D.overview;
+  const overall = ov.overall;
+  document.getElementById('ovTotalCredit').textContent = fmtMoneyShort(overall.total);
+  document.getElementById('ovTotalCount').textContent = `${fmtNum(overall.count)} accounts`;
+  document.getElementById('ovPaTotal').textContent = fmtMoneyShort(ov.per_state.PA.total);
+  document.getElementById('ovPaCount').textContent = `${fmtNum(ov.per_state.PA.count)} accounts`;
+  document.getElementById('ovNjTotal').textContent = fmtMoneyShort(ov.per_state.NJ.total);
+  document.getElementById('ovNjCount').textContent = `${fmtNum(ov.per_state.NJ.count)} accounts`;
+  const ctTot = ov.per_state.CT ? ov.per_state.CT.total : 0;
+  const ctCnt = ov.per_state.CT ? ov.per_state.CT.count : 0;
+  document.getElementById('ovCtTotal').textContent = fmtMoneyShort(ctTot);
+  document.getElementById('ovCtCount').textContent = `${fmtNum(ctCnt)} accounts`;
+
+  const oldTotal = aboveOneYearSum(overall.buckets);
+  document.getElementById('ovOldTotal').textContent = fmtMoneyShort(oldTotal);
+  const oldPct = overall.total ? (oldTotal/overall.total*100) : 0;
+  document.getElementById('ovOldPct').textContent = `${oldPct.toFixed(1)}% of total`;
+
+  // ----- Progress by region (live from STATE_OVERLAY) -----
+  const progGrid = document.getElementById('ovProgressGrid');
+  const states = ['PA','NJ','CT'];
+  progGrid.innerHTML = states.map(st=>{
+    const recs = D.states[st] || [];
+    let doneAmt=0, doneCnt=0, progAmt=0, progCnt=0;
+    recs.forEach(r=>{
+      const o = STATE_OVERLAY[`${st}_${r.PatNum}`] || {};
+      if (o.status === 'Completed'){ doneAmt += r.BalTotal; doneCnt++; }
+      else if (o.status === 'In Progress'){ progAmt += r.BalTotal; progCnt++; }
+    });
+    const total = recs.reduce((a,r)=>a+r.BalTotal,0);
+    const leftAmt = total - doneAmt - progAmt;
+    const leftCnt = recs.length - doneCnt - progCnt;
+    const totalAbs = Math.abs(total) || 1;
+    const pctDone = Math.abs(doneAmt)/totalAbs*100;
+    const pctProg = Math.abs(progAmt)/totalAbs*100;
+    const pctLeft = Math.abs(leftAmt)/totalAbs*100;
+    const seg = (cls, pct, label) => pct >= 0.5 ? `<div class="seg ${cls}" style="width:${pct}%;" title="${label}">${pct>=8?Math.round(pct)+'%':''}</div>` : '';
+    return `<div class="region-prog">
+      <div class="rp-head">
+        <span class="rp-state">${st}</span>
+        <span class="rp-total">${fmtMoneyShort(total)} total · ${fmtNum(recs.length)} accts</span>
+      </div>
+      <div class="rp-bar">
+        ${seg('done', pctDone, 'Completed')}
+        ${seg('prog', pctProg, 'In Progress')}
+        ${seg('left', pctLeft, 'Remaining')}
+      </div>
+      <div class="rp-stats">
+        <div class="rp-stat done"><span class="v">${fmtMoneyShort(doneAmt)}</span><span class="l">Completed</span><span class="l" style="text-transform:none;color:var(--muted);">${fmtNum(doneCnt)} accts</span></div>
+        <div class="rp-stat prog"><span class="v">${fmtMoneyShort(progAmt)}</span><span class="l">In Progress</span><span class="l" style="text-transform:none;color:var(--muted);">${fmtNum(progCnt)} accts</span></div>
+        <div class="rp-stat left"><span class="v">${fmtMoneyShort(leftAmt)}</span><span class="l">Remaining</span><span class="l" style="text-transform:none;color:var(--muted);">${fmtNum(leftCnt)} accts</span></div>
+      </div>
+      <div class="rp-pct">${pctDone.toFixed(1)}% worked · ${pctProg.toFixed(1)}% in progress · ${pctLeft.toFixed(1)}% remaining</div>
+    </div>`;
+  }).join('');
+
+  // bucket bar
+  const bar = document.getElementById('ovBucketBar');
+  const buckets = overall.buckets;
+  const totalAbs = Object.values(buckets).reduce((a,b)=>a+Math.abs(b),0) || 1;
+  const palette = ['#dcfce7','#bbf7d0','#86efac','#4ade80','#22c55e','#16a34a','#15803d','#166534','#14532d','#0a3a1e'];
+  bar.innerHTML = BUCKETS.map((b,i)=>{
+    const v = buckets[b]||0;
+    const w = Math.abs(v)/totalAbs*100;
+    if (w<0.5) return '';
+    return `<div class="seg" style="width:${w}%;background:${palette[i]};" title="${b}: ${fmtMoney(v)}">${w>=6?b:''}</div>`;
+  }).join('');
+
+  // bar chart
+  if (window._ovBucketChart) window._ovBucketChart.destroy();
+  window._ovBucketChart = new Chart(document.getElementById('ovBucketChart'), {
+    type:'bar',
+    data:{ labels: BUCKETS, datasets:[
+      {label:'PA', data: BUCKETS.map(b=>Math.abs(ov.per_state.PA.buckets[b]||0)), backgroundColor:'#16a34a'},
+      {label:'NJ', data: BUCKETS.map(b=>Math.abs(ov.per_state.NJ.buckets[b]||0)), backgroundColor:'#86efac'},
+      {label:'CT', data: BUCKETS.map(b=>Math.abs((ov.per_state.CT&&ov.per_state.CT.buckets[b])||0)), backgroundColor:'#0a3a1e'},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      scales:{ x:{ stacked:true }, y:{ stacked:true, beginAtZero:true, ticks:{ callback:v=>'$'+(v/1000).toFixed(0)+'K' } } },
+      plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label: c=> c.dataset.label+': '+fmtMoney(-c.parsed.y) } } }
+    }
+  });
+
+  // state pie
+  if (window._ovStateChart) window._ovStateChart.destroy();
+  window._ovStateChart = new Chart(document.getElementById('ovStateChart'), {
+    type:'doughnut',
+    data:{ labels:['PA','NJ','CT'], datasets:[{ data:[Math.abs(ov.per_state.PA.total), Math.abs(ov.per_state.NJ.total), Math.abs(ctTot)], backgroundColor:['#16a34a','#86efac','#0a3a1e'], borderWidth:2, borderColor:'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label: c => c.label+': '+fmtMoney(-c.parsed) } } } }
+  });
+
+  // MoM card
+  const prev = ov.prev;
+  const mom = document.getElementById('ovMomCard');
+  if (!prev){
+    mom.innerHTML = `<div style="text-align:center;padding:30px 10px;color:var(--muted);font-size:13px;">No prior snapshot yet. Month-over-month will populate after next month's refresh.</div>`;
+  } else {
+    const row = (lbl, cur, prv, isTotal=false) => {
+      const d = cur - prv;
+      const better = d > 0;  // credits are negative; less-negative is better
+      const cls = better ? 'down' : 'up';
+      const arrow = better ? '▼' : '▲';
+      const rowStyle = isTotal ? 'border-top:2px solid var(--green-600);background:var(--green-50);font-weight:700;' : '';
+      return `<tr style="${rowStyle}"><td>${lbl}</td><td class="num">${fmtMoneyShort(prv)}</td><td class="num">${fmtMoneyShort(cur)}</td><td class="num change ${cls}" style="color:${better?'var(--green-600)':'var(--coral)'};">${arrow} ${fmtMoneyShort(Math.abs(d))}</td></tr>`;
+    };
+    const stateRows = ['PA','NJ','CT'].map(s => ({
+      label: s,
+      cur: ov.per_state[s]?.total || 0,
+      prv: prev.per_state[s]?.total || 0,
+    })).sort((a,b) => a.cur - b.cur);  // most negative first = largest credit first
+    mom.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">vs snapshot ${prev.as_of}</div>
+      <table><thead><tr><th></th><th class="num">Prior</th><th class="num">Current</th><th class="num">Δ</th></tr></thead><tbody>
+      ${stateRows.map(r => row(r.label, r.cur, r.prv)).join('')}
+      ${row('Overall', overall.total, prev.overall.total||0, true)}
+      </tbody></table>`;
+  }
+
+  // top clinics
+  const tbody = document.querySelector('#ovClinicTable tbody');
+  tbody.innerHTML = ov.clinics.slice(0,40).map((c,i)=>{
+    const b = c.buckets;
+    const young = (b['0-30']||0)+(b['31-60']||0)+(b['61-90']||0);
+    const mid = (b['91-120']||0)+(b['121-365']||0);
+    const oneToThree = b['1-3 yrs']||0;
+    const fourPlus = b['4+ yrs']||0;
+    return `<tr>
+      <td class="rank">${i+1}</td>
+      <td><strong>${c.clinic}</strong></td>
+      <td><span class="summary-pill">${c.state}</span></td>
+      <td class="num">${fmtNum(c.count)}</td>
+      <td class="num neg">${fmtMoney(c.total)}</td>
+      <td class="num neg">${fmtMoneyShort(young)}</td>
+      <td class="num neg">${fmtMoneyShort(mid)}</td>
+      <td class="num neg">${fmtMoneyShort(oneToThree)}</td>
+      <td class="num neg">${fmtMoneyShort(fourPlus)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ============= STATE TAB =============
+const stateView = {
+  PA: { records:[], filtered:[], page:1, sort:{col:'BalTotal', dir:'asc'}, filters:{} },
+  NJ: { records:[], filtered:[], page:1, sort:{col:'BalTotal', dir:'asc'}, filters:{} },
+  CT: { records:[], filtered:[], page:1, sort:{col:'BalTotal', dir:'asc'}, filters:{} },
+};
+const PAGE_SIZE = 100;
+
+function buildStateTab(state){
+  const root = document.getElementById('tab-'+state.toLowerCase());
+  const recs = D.states[state] || [];
+  stateView[state].records = recs;
+
+  if (recs.length === 0){
+    root.innerHTML = `<div class="card empty-state"><h3>${state} data not loaded yet</h3><p>Upload the monthly credit export to the OneDrive folder, then re-run <code>build_dashboard.py</code>.</p></div>`;
+    return;
+  }
+
+  const clinics = [...new Set(recs.map(r=>r.Clinic))].sort();
+  const staff = D.staff[state] || [];
+
+  root.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi dark"><div class="label">${state} Total Credit</div><div class="value" id="${state}_kTotal">$0</div><div class="sub" id="${state}_kCount">0 accounts</div></div>
+      <div class="kpi coral"><div class="label">Aged &gt; 1 yr</div><div class="value" id="${state}_kAged">$0</div><div class="sub" id="${state}_kAgedPct">—</div></div>
+      <div class="kpi warm"><div class="label">In Progress</div><div class="value" id="${state}_kInprog">0</div></div>
+      <div class="kpi"><div class="label">Completed</div><div class="value" id="${state}_kDone">0</div></div>
+      <div class="kpi"><div class="label">Showing</div><div class="value" id="${state}_kShown">0</div><div class="sub">filtered rows</div></div>
+    </div>
+
+    <div class="card">
+      <div class="filter-bar">
+        <label>Search</label>
+        <input type="text" id="${state}_qSearch" placeholder="PatNum / Clinic">
+        <label>Aging</label>
+        <div class="multi-select" id="${state}_msBucket"></div>
+        <label>Clinic</label>
+        <div class="multi-select" id="${state}_msClinic"></div>
+        <label>Status</label>
+        <select id="${state}_qStatus"><option value="">All</option>${D.statuses.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+        <label>Assigned</label>
+        <select id="${state}_qAssigned"><option value="">All</option><option value="__UNASSIGNED__">— Unassigned</option>${staff.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+        <label>Action</label>
+        <select id="${state}_qAction"><option value="">All</option>${D.actions.sort().map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+        <button class="btn-clear" onclick="clearFilters('${state}')">Clear</button>
+      </div>
+
+      <div class="table-scroll">
+        <table id="${state}_table">
+          <thead>
+            <tr>
+              <th class="sortable" data-col="PatNum">PatNum</th>
+              <th class="sortable" data-col="Clinic">Clinic</th>
+              <th class="sortable" data-col="LastAppt">Last Appt</th>
+              <th class="sortable num" data-col="OldestBucket">Oldest</th>
+              ${BUCKETS.map(b=>`<th class="sortable num" data-col="Bal_${b}">${b}</th>`).join('')}
+              <th class="sortable num" data-col="BalTotal">Total</th>
+              <th>Status</th>
+              <th>Assigned</th>
+              <th>Action</th>
+              <th>Date Worked</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button onclick="movePage('${state}',-1)" id="${state}_prev">‹ Prev</button>
+        <span id="${state}_pageInfo">Page 1 of 1</span>
+        <button onclick="movePage('${state}',1)" id="${state}_next">Next ›</button>
+      </div>
+    </div>
+  `;
+
+  // build multi-selects
+  buildMultiSelect(`${state}_msBucket`, 'Aging buckets', BUCKETS, ()=>applyFilters(state));
+  buildMultiSelect(`${state}_msClinic`, 'Clinics', clinics, ()=>applyFilters(state));
+
+  // wire filters
+  document.getElementById(`${state}_qSearch`).addEventListener('input', ()=>applyFilters(state));
+  document.getElementById(`${state}_qStatus`).addEventListener('change', ()=>applyFilters(state));
+  document.getElementById(`${state}_qAssigned`).addEventListener('change', ()=>applyFilters(state));
+  document.getElementById(`${state}_qAction`).addEventListener('change', ()=>applyFilters(state));
+
+  // sort headers
+  document.querySelectorAll(`#${state}_table th.sortable`).forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const col = th.dataset.col;
+      const sv = stateView[state];
+      if (sv.sort.col === col){
+        sv.sort.dir = sv.sort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sv.sort.col = col;
+        sv.sort.dir = (col === 'BalTotal' || col.startsWith('Bal_') || col === 'OldestBucket') ? 'asc' : 'asc';
+      }
+      sv.page = 1;
+      applyFilters(state);
+    });
+  });
+
+  applyFilters(state);
+}
+
+function buildMultiSelect(containerId, label, options, onChange){
+  const root = document.getElementById(containerId);
+  const id = containerId;
+  root.innerHTML = `
+    <div class="ms-toggle" id="${id}_toggle">
+      <span><span id="${id}_label">${label}</span> <span class="ms-count" id="${id}_count">0</span></span>
+      <span class="ms-arrow">▼</span>
+    </div>
+    <div class="ms-dropdown" id="${id}_drop">
+      <input class="ms-search" placeholder="Search…" id="${id}_search">
+      <div class="ms-actions"><button data-act="all">All</button><button data-act="none">None</button></div>
+      <div id="${id}_opts">
+        ${options.map((o,i)=>`<label class="ms-option"><input type="checkbox" value="${o.replace(/"/g,'&quot;')}" data-ms="${id}"> ${o}</label>`).join('')}
+      </div>
+    </div>`;
+  const toggle = document.getElementById(id+'_toggle');
+  const drop = document.getElementById(id+'_drop');
+  toggle.addEventListener('click', e=>{ e.stopPropagation(); drop.classList.toggle('open'); });
+  document.addEventListener('click', e=>{
+    if (!root.contains(e.target)) drop.classList.remove('open');
+  });
+  document.getElementById(id+'_search').addEventListener('input', e=>{
+    const q = e.target.value.toLowerCase();
+    drop.querySelectorAll('.ms-option').forEach(opt=>{
+      opt.classList.toggle('hidden', !opt.textContent.toLowerCase().includes(q));
+    });
+  });
+  drop.querySelectorAll('.ms-actions button').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const act = e.target.dataset.act;
+      drop.querySelectorAll('input[type=checkbox]:not(.hidden)').forEach(cb=>{
+        if (act==='all') cb.checked = true;
+        if (act==='none') cb.checked = false;
+      });
+      updateMsCount(id);
+      onChange();
+    });
+  });
+  drop.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{ updateMsCount(id); onChange(); });
+  });
+  updateMsCount(id);
+}
+function updateMsCount(id){
+  const checked = document.querySelectorAll(`#${id}_drop input[type=checkbox]:checked`).length;
+  document.getElementById(id+'_count').textContent = checked;
+}
+function getMsValues(id){
+  return [...document.querySelectorAll(`#${id}_drop input[type=checkbox]:checked`)].map(cb=>cb.value);
+}
+
+function clearFilters(state){
+  document.getElementById(`${state}_qSearch`).value = '';
+  document.getElementById(`${state}_qStatus`).value = '';
+  document.getElementById(`${state}_qAssigned`).value = '';
+  document.getElementById(`${state}_qAction`).value = '';
+  document.querySelectorAll(`#${state}_msBucket_drop input[type=checkbox]`).forEach(cb=>cb.checked=false);
+  document.querySelectorAll(`#${state}_msClinic_drop input[type=checkbox]`).forEach(cb=>cb.checked=false);
+  updateMsCount(`${state}_msBucket`);
+  updateMsCount(`${state}_msClinic`);
+  applyFilters(state);
+}
+
+function applyFilters(state){
+  const sv = stateView[state];
+  const q = (document.getElementById(`${state}_qSearch`).value||'').toLowerCase().trim();
+  const sel = {
+    buckets: new Set(getMsValues(`${state}_msBucket`)),
+    clinics: new Set(getMsValues(`${state}_msClinic`)),
+    status: document.getElementById(`${state}_qStatus`).value,
+    assigned: document.getElementById(`${state}_qAssigned`).value,
+    action: document.getElementById(`${state}_qAction`).value,
+  };
+
+  sv.filtered = sv.records.filter(r=>{
+    if (sel.clinics.size && !sel.clinics.has(r.Clinic)) return false;
+    if (sel.buckets.size && !sel.buckets.has(r.OldestBucket)) return false;
+    const ov = STATE_OVERLAY[rowKey(r)] || {};
+    if (sel.status){
+      const cur = ov.status || '';
+      if (cur !== sel.status) return false;
+    }
+    if (sel.assigned){
+      const cur = ov.assigned || '';
+      if (sel.assigned === '__UNASSIGNED__'){
+        if (cur && cur.trim()) return false;
+      } else if (cur !== sel.assigned) return false;
+    }
+    if (sel.action){
+      const cur = ov.action || '';
+      if (cur !== sel.action) return false;
+    }
+    if (q){
+      const hay = (r.PatNum+' '+r.Clinic).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // sort
+  const { col, dir } = sv.sort;
+  const sign = dir === 'asc' ? 1 : -1;
+  const bucketRank = {};
+  BUCKETS.forEach((b,i)=> bucketRank[b]=i);
+  sv.filtered.sort((a,b)=>{
+    let av=a[col], bv=b[col];
+    if (col === 'OldestBucket'){
+      av = bucketRank[a.OldestBucket] ?? -1;
+      bv = bucketRank[b.OldestBucket] ?? -1;
+      return sign * (bv - av);  // older first by default
+    }
+    if (typeof av === 'number' && typeof bv === 'number') return sign*(av-bv);
+    return sign*String(av||'').localeCompare(String(bv||''));
+  });
+
+  sv.page = Math.min(sv.page, Math.max(1, Math.ceil(sv.filtered.length / PAGE_SIZE)));
+  renderStateTable(state);
+}
+
+function updateStateStats(state){
+  // Stat tiles only — never touches the table body, so live Firebase updates
+  // can refresh counts without wiping the user's text selection.
+  const sv = stateView[state];
+  if (!sv || !document.getElementById(`${state}_kTotal`)) return;
+  const total = sv.filtered.reduce((a,r)=>a+r.BalTotal, 0);
+  const aged = sv.filtered.reduce((a,r)=>a + AGED_BUCKETS.reduce((s,b)=>s+(r['Bal_'+b]||0),0), 0);
+  let inprog=0, done=0;
+  sv.filtered.forEach(r=>{
+    const ov = STATE_OVERLAY[rowKey(r)] || {};
+    if (ov.status === 'In Progress') inprog++;
+    if (ov.status === 'Completed') done++;
+  });
+  document.getElementById(`${state}_kTotal`).textContent = fmtMoneyShort(total);
+  document.getElementById(`${state}_kCount`).textContent = `${fmtNum(sv.filtered.length)} accounts`;
+  document.getElementById(`${state}_kAged`).textContent = fmtMoneyShort(aged);
+  document.getElementById(`${state}_kAgedPct`).textContent = total ? `${(aged/total*100).toFixed(1)}% of filter` : '—';
+  document.getElementById(`${state}_kInprog`).textContent = fmtNum(inprog);
+  document.getElementById(`${state}_kDone`).textContent = fmtNum(done);
+  document.getElementById(`${state}_kShown`).textContent = fmtNum(sv.filtered.length);
+}
+
+function renderStateTable(state){
+  updateStateStats(state);
+  const sv = stateView[state];
+
+  // sort indicator
+  document.querySelectorAll(`#${state}_table th.sortable`).forEach(th=>{
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.dataset.col === sv.sort.col) th.classList.add('sort-'+sv.sort.dir);
+  });
+
+  const start = (sv.page-1)*PAGE_SIZE;
+  const pageRows = sv.filtered.slice(start, start+PAGE_SIZE);
+  const tbody = document.querySelector(`#${state}_table tbody`);
+  tbody.innerHTML = pageRows.map((r, idx)=>{
+    const k = rowKey(r);
+    const ov = STATE_OVERLAY[k] || {};
+    const status = ov.status || '';
+    const assigned = ov.assigned || '';
+    const action = ov.action || '';
+    const dateWorked = ov.dateWorked || '';
+    const remarks = ov.remarks || '';
+    const staff = D.staff[state] || [];
+    const rowCls = status === 'Completed' ? 'row-completed' : (status === 'In Progress' ? 'row-inprogress' : '');
+    const stCls = status === 'Completed' ? 'completed' : (status === 'In Progress' ? 'inprogress' : '');
+
+    const bucketTds = BUCKETS.map(b=>{
+      const v = r['Bal_'+b] || 0;
+      if (!v) return `<td class="bucket-cell" style="color:#cbd5e1;">—</td>`;
+      const aged = AGED_BUCKETS.includes(b);
+      return `<td class="bucket-cell ${aged?'aged':''}">${fmtMoneyShort(v)}</td>`;
+    }).join('');
+
+    return `<tr class="${rowCls}" data-k="${k}">
+      <td>${r.PatNum}</td>
+      <td>${escapeHtml(r.Clinic)}</td>
+      <td>${r.LastAppt||''}</td>
+      <td class="num"><span class="summary-pill ${oldPillCls(r.OldestBucket)}">${r.OldestBucket||'—'}</span></td>
+      ${bucketTds}
+      <td class="num neg">${fmtMoney(r.BalTotal)}</td>
+      <td><select class="status-select ${stCls}" data-k="${k}" data-f="status">
+        <option value="">—</option>${D.statuses.map(s=>`<option value="${s}" ${s===status?'selected':''}>${s}</option>`).join('')}
+      </select></td>
+      <td><select class="staff-select" data-k="${k}" data-f="assigned">
+        <option value="">—</option>${staff.map(s=>`<option value="${s}" ${s===assigned?'selected':''}>${s}</option>`).join('')}
+      </select></td>
+      <td><select class="action-select" data-k="${k}" data-f="action">
+        <option value="">—</option>${D.actions.slice().sort().map(s=>`<option value="${s}" ${s===action?'selected':''}>${s}</option>`).join('')}
+      </select></td>
+      <td><input class="date-input" type="date" data-k="${k}" data-f="dateWorked" value="${dateWorked}"></td>
+      <td><input class="remarks-input ${remarks?'has-text':''}" type="text" data-k="${k}" data-f="remarks" value="${escapeAttr(remarks)}" placeholder="Notes…"></td>
+    </tr>`;
+  }).join('');
+
+  // wire row inputs
+  tbody.querySelectorAll('[data-k][data-f]').forEach(el=>{
+    el.addEventListener('focus', ()=> markInteract(el.dataset.k, el.dataset.f));
+    el.addEventListener('mousedown', ()=> markInteract(el.dataset.k, el.dataset.f));
+    const handler = ()=>{
+      const k = el.dataset.k, f = el.dataset.f;
+      const v = el.value;
+      STATE_OVERLAY[k] = STATE_OVERLAY[k] || {};
+      STATE_OVERLAY[k][f] = v;
+      writeField(k, f, v);
+      if (f === 'status'){
+        const row = el.closest('tr');
+        row.classList.remove('row-completed','row-inprogress');
+        if (v === 'Completed') row.classList.add('row-completed');
+        if (v === 'In Progress') row.classList.add('row-inprogress');
+        el.classList.remove('completed','inprogress');
+        if (v === 'Completed') el.classList.add('completed');
+        if (v === 'In Progress') el.classList.add('inprogress');
+      }
+      if (f === 'remarks'){
+        el.classList.toggle('has-text', !!v);
+      }
+    };
+    el.addEventListener('change', handler);
+    if (el.tagName === 'INPUT' && el.type === 'text'){
+      el.addEventListener('blur', handler);
+    }
+  });
+
+  // pager
+  const totalPages = Math.max(1, Math.ceil(sv.filtered.length / PAGE_SIZE));
+  document.getElementById(`${state}_pageInfo`).textContent = `Page ${sv.page} of ${totalPages} • ${fmtNum(sv.filtered.length)} rows`;
+  document.getElementById(`${state}_prev`).disabled = sv.page <= 1;
+  document.getElementById(`${state}_next`).disabled = sv.page >= totalPages;
+}
+
+function movePage(state, delta){
+  const sv = stateView[state];
+  const totalPages = Math.max(1, Math.ceil(sv.filtered.length / PAGE_SIZE));
+  sv.page = Math.max(1, Math.min(totalPages, sv.page + delta));
+  renderStateTable(state);
+  document.querySelector(`#tab-${state.toLowerCase()} .table-scroll`).scrollTop = 0;
+}
+
+function oldPillCls(b){
+  if (!b) return '';
+  if (AGED_BUCKETS.includes(b)) return 'coral';
+  if (['91-120','121-365'].includes(b)) return 'amber';
+  return '';
+}
+
+function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function escapeAttr(s){ return escapeHtml(s); }
+
+// ============= FIREBASE WRITES =============
+function writeField(k, field, value){
+  if (!db) return;
+  db.ref('credits/'+k+'/'+field).set(value === '' ? null : value)
+    .catch(err=>{ console.warn('Firebase write failed', err); setFbStatus('error','Sync error'); });
+}
+
+function subscribeFirebase(){
+  if (!db) return;
+  db.ref('credits').on('value', snap=>{
+    const val = snap.val() || {};
+    Object.entries(val).forEach(([k, fields])=>{
+      STATE_OVERLAY[k] = STATE_OVERLAY[k] || {};
+      Object.entries(fields||{}).forEach(([f, v])=>{
+        // honor cooldown: don't overwrite a field the user is actively editing
+        if (inCooldown(k, f)) return;
+        STATE_OVERLAY[k][f] = v;
+        // patch DOM if rendered
+        const el = document.querySelector(`[data-k="${CSS.escape(k)}"][data-f="${f}"]`);
+        if (el && document.activeElement !== el){
+          el.value = v || '';
+          if (f === 'status'){
+            const row = el.closest('tr');
+            row.classList.remove('row-completed','row-inprogress');
+            if (v === 'Completed') row.classList.add('row-completed');
+            if (v === 'In Progress') row.classList.add('row-inprogress');
+            el.classList.remove('completed','inprogress');
+            if (v === 'Completed') el.classList.add('completed');
+            if (v === 'In Progress') el.classList.add('inprogress');
+          }
+          if (f === 'remarks'){ el.classList.toggle('has-text', !!v); }
+        }
+      });
+    });
+    setFbStatus('synced','Synced');
+    // refresh stat tiles for currently-visible tab WITHOUT re-rendering the table
+    // (re-rendering kills any in-progress text selection, breaking copy-to-clipboard)
+    const active = document.querySelector('.tab-content.active').id.replace('tab-','').toUpperCase();
+    if (['PA','NJ','CT'].includes(active)) updateStateStats(active);
+    // Overview is cheap and shows live progress — always refresh it so
+    // KPI tiles + progress card update when staff in another tab mark work done.
+    renderOverview();
+    // update overview completed KPI
+    let comp = 0, n = 0;
+    Object.values(STATE_OVERLAY).forEach(o=>{ if (o.status){ n++; if (o.status==='Completed') comp++; } });
+    const totalAccts = D.states.PA.length + D.states.NJ.length + D.states.CT.length;
+    document.getElementById('ovCompleted').textContent = fmtNum(comp);
+    document.getElementById('ovCompletedPct').textContent = totalAccts ? `${(comp/totalAccts*100).toFixed(1)}% of accounts` : '—';
+  }, err=>{
+    console.warn('Firebase subscribe failed', err);
+    setFbStatus('error','Offline');
+  });
+}
+
+// ============= TABS =============
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const t = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active', c.id==='tab-'+t));
+  });
+});
+
+// ============= BOOT =============
+function boot(){
+  renderOverview();
+  buildStateTab('PA');
+  buildStateTab('NJ');
+  buildStateTab('CT');
+  subscribeFirebase();
+}
+if (sessionStorage.getItem('credits_auth')==='1'){
+  boot();
+}
+</script>
+</body>
+</html>

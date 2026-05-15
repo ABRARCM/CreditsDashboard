@@ -1,0 +1,15 @@
+# Firebase live backups contain staff names + remarks + claims (PHI-adjacent)
+# Per Abra RCM policy: ABRARCM/* repos are PUBLIC; never commit Firebase backups.
+firebase_backup_*.json
+firebase_backup_*.csv
+
+# Local Python noise
+__pycache__/
+*.pyc
+.DS_Store
+
+# Snapshots are monthly aggregate totals (no PII) but keep them local-only for now
+snapshots/
+
+# dashboard_data.json duplicates what's embedded in index.html
+dashboard_data.json
