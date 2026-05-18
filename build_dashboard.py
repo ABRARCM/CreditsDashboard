@@ -341,10 +341,15 @@ def build_payload():
             "CT": ["AB", "CM"],  # CT uses PA AR staff
         },
         "actions": [
-            "PPO Refund Requested",
+            "Adjustment - Invalid Credit",
+            "Final - Unable to Contact Patient",
+            "First Attempt to Contact Patient",
+            "Medicaid Refund Processed",
             "Patient Refund Processed",
             "Patient Refund Requested",
-            "Medicaid Refund Processed",
+            "PPO Refund Requested",
+            "Second Attempt to Contact Patient",
+            "Third Attempt to Contact Patient",
             "TX Pre-Payment",
         ],
         "statuses": ["In Progress", "Completed"],
