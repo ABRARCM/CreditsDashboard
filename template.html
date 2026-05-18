@@ -561,7 +561,7 @@ function buildStateTab(state){
           ? `<select id="${state}_qAssigned"><option value="">All</option><option value="__UNASSIGNED__">— Unassigned</option>${staff.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>`
           : `<input type="text" id="${state}_qAssigned" placeholder="initials…" style="width:90px;">`}
         <label>Action</label>
-        <select id="${state}_qAction"><option value="">All</option>${D.actions.slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'})).map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+        <select id="${state}_qAction"><option value="">All</option>${D.actions.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
         <button class="btn-clear" onclick="clearFilters('${state}')">Clear</button>
         <button class="btn-export" onclick="exportExcel('${state}')">⬇ Excel</button>
       </div>
@@ -851,7 +851,7 @@ function renderStateTable(state){
         ? `<select class="staff-select" data-k="${k}" data-f="assigned"><option value="">—</option>${staff.map(s=>`<option value="${s}" ${s===assigned?'selected':''}>${s}</option>`).join('')}</select>`
         : `<input class="staff-input" type="text" data-k="${k}" data-f="assigned" value="${escapeAttr(assigned)}" placeholder="initials">`}</td>
       <td><select class="action-select" data-k="${k}" data-f="action">
-        <option value="">—</option>${D.actions.slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'})).map(s=>`<option value="${s}" ${s===action?'selected':''}>${s}</option>`).join('')}
+        <option value="">—</option>${D.actions.map(s=>`<option value="${s}" ${s===action?'selected':''}>${s}</option>`).join('')}
       </select></td>
       <td><input class="date-input" type="date" data-k="${k}" data-f="dateWorked" value="${dateWorked}"></td>
       <td><input class="remarks-input ${remarks?'has-text':''}" type="text" data-k="${k}" data-f="remarks" value="${escapeAttr(remarks)}" placeholder="Notes…"></td>

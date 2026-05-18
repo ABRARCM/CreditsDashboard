@@ -341,15 +341,17 @@ def build_payload():
             "CT": ["AB", "CM"],  # CT uses PA AR staff
         },
         "actions": [
-            "Adjustment - Invalid Credit",
+            # Contact-attempt flow stays grouped at the top in workflow order
+            "1st Attempt to Contact Patient",
+            "2nd Attempt to Contact Patient",
+            "3rd Attempt to Contact Patient",
             "Final - Unable to Contact Patient",
-            "First Attempt to Contact Patient",
+            # Remainder alphabetical
+            "Adjustment - Invalid Credit",
             "Medicaid Refund Processed",
             "Patient Refund Processed",
             "Patient Refund Requested",
             "PPO Refund Requested",
-            "Second Attempt to Contact Patient",
-            "Third Attempt to Contact Patient",
             "TX Pre-Payment",
         ],
         "statuses": ["In Progress", "Completed"],
