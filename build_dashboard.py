@@ -337,7 +337,7 @@ def build_payload():
         },
         "staff": {
             "PA": ["AB", "CM"],
-            "NJ": ["JR", "MS"],
+            "NJ": [],  # NJ uses free-text initials, no preset list
             "CT": ["AB", "CM"],  # CT uses PA AR staff
         },
         "actions": [

@@ -6,6 +6,7 @@
 <title>Aged Credits Dashboard — Abra Health Group</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
@@ -62,6 +63,9 @@ tr:hover{background:#f7fdf8;}
 .filter-bar input[type="text"]{width:200px;}
 .btn-clear{font-family:'Poppins',sans-serif;padding:7px 14px;border:1px solid var(--green-300);border-radius:8px;background:#fff;cursor:pointer;font-size:12px;color:var(--green-700);font-weight:600;}
 .btn-clear:hover{background:var(--green-100);}
+.btn-export{font-family:'Poppins',sans-serif;padding:7px 14px;border:1px solid var(--green-600);border-radius:8px;background:var(--green-600);cursor:pointer;font-size:12px;color:#fff;font-weight:600;margin-left:auto;}
+.btn-export:hover{background:var(--green-700);}
+.staff-input{font-family:'Poppins',sans-serif;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff;width:80px;text-transform:uppercase;}
 .multi-select{position:relative;display:inline-block;min-width:170px;}
 .multi-select .ms-toggle{font-family:'Poppins',sans-serif;padding:7px 12px;border:1px solid var(--green-200);border-radius:8px;font-size:13px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px;white-space:nowrap;min-height:34px;}
 .multi-select .ms-toggle:hover{border-color:var(--green-500);}
@@ -553,10 +557,13 @@ function buildStateTab(state){
         <label>Status</label>
         <select id="${state}_qStatus"><option value="">All</option>${D.statuses.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
         <label>Assigned</label>
-        <select id="${state}_qAssigned"><option value="">All</option><option value="__UNASSIGNED__">— Unassigned</option>${staff.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+        ${staff.length
+          ? `<select id="${state}_qAssigned"><option value="">All</option><option value="__UNASSIGNED__">— Unassigned</option>${staff.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>`
+          : `<input type="text" id="${state}_qAssigned" placeholder="initials…" style="width:90px;">`}
         <label>Action</label>
         <select id="${state}_qAction"><option value="">All</option>${D.actions.slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'})).map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
         <button class="btn-clear" onclick="clearFilters('${state}')">Clear</button>
+        <button class="btn-export" onclick="exportExcel('${state}')">⬇ Excel</button>
       </div>
 
       <div class="table-scroll">
@@ -594,7 +601,9 @@ function buildStateTab(state){
   // wire filters (persist + apply)
   document.getElementById(`${state}_qSearch`).addEventListener('input', ()=>{ saveFilterState(state); applyFilters(state); });
   document.getElementById(`${state}_qStatus`).addEventListener('change', ()=>{ saveFilterState(state); applyFilters(state); });
-  document.getElementById(`${state}_qAssigned`).addEventListener('change', ()=>{ saveFilterState(state); applyFilters(state); });
+  const qAssignedEl = document.getElementById(`${state}_qAssigned`);
+  const qAssignedEvt = qAssignedEl.tagName === 'INPUT' ? 'input' : 'change';
+  qAssignedEl.addEventListener(qAssignedEvt, ()=>{ saveFilterState(state); applyFilters(state); });
   document.getElementById(`${state}_qAction`).addEventListener('change', ()=>{ saveFilterState(state); applyFilters(state); });
 
   // sort headers
@@ -683,6 +692,34 @@ function clearFilters(state){
   applyFilters(state);
 }
 
+function exportExcel(state){
+  const sv = stateView[state];
+  const rows = (sv && sv.filtered) || [];
+  if (!rows.length){ alert('No rows to export — adjust filters first.'); return; }
+  const data = rows.map(r=>{
+    const ov = STATE_OVERLAY[rowKey(r)] || {};
+    const row = {
+      PatNum: r.PatNum,
+      Clinic: r.Clinic,
+      'Last Appt': r.LastAppt || '',
+      'Oldest Bucket': r.OldestBucket || '',
+    };
+    BUCKETS.forEach(b=>{ row[b] = r['Bal_'+b] || 0; });
+    row['Bal Total'] = r.BalTotal;
+    row['Status'] = ov.status || '';
+    row['Assigned'] = ov.assigned || '';
+    row['Action'] = ov.action || '';
+    row['Date Worked'] = ov.dateWorked || '';
+    row['Remarks'] = ov.remarks || '';
+    return row;
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${state} Credits`);
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `Credits_${state}_${stamp}.xlsx`);
+}
+
 function applyFilters(state){
   const sv = stateView[state];
   const q = (document.getElementById(`${state}_qSearch`).value||'').toLowerCase().trim();
@@ -703,10 +740,17 @@ function applyFilters(state){
       if (cur !== sel.status) return false;
     }
     if (sel.assigned){
-      const cur = ov.assigned || '';
+      const cur = (ov.assigned || '').trim();
       if (sel.assigned === '__UNASSIGNED__'){
-        if (cur && cur.trim()) return false;
-      } else if (cur !== sel.assigned) return false;
+        if (cur) return false;
+      } else {
+        // Free-text input (e.g. NJ) does substring match; dropdown does exact match.
+        const el = document.getElementById(`${state}_qAssigned`);
+        const isFreeText = el && el.tagName === 'INPUT';
+        if (isFreeText){
+          if (!cur.toLowerCase().includes(sel.assigned.toLowerCase())) return false;
+        } else if (cur !== sel.assigned) return false;
+      }
     }
     if (sel.action){
       const cur = ov.action || '';
@@ -803,9 +847,9 @@ function renderStateTable(state){
       <td><select class="status-select ${stCls}" data-k="${k}" data-f="status">
         <option value="">—</option>${D.statuses.map(s=>`<option value="${s}" ${s===status?'selected':''}>${s}</option>`).join('')}
       </select></td>
-      <td><select class="staff-select" data-k="${k}" data-f="assigned">
-        <option value="">—</option>${staff.map(s=>`<option value="${s}" ${s===assigned?'selected':''}>${s}</option>`).join('')}
-      </select></td>
+      <td>${staff.length
+        ? `<select class="staff-select" data-k="${k}" data-f="assigned"><option value="">—</option>${staff.map(s=>`<option value="${s}" ${s===assigned?'selected':''}>${s}</option>`).join('')}</select>`
+        : `<input class="staff-input" type="text" data-k="${k}" data-f="assigned" value="${escapeAttr(assigned)}" placeholder="initials">`}</td>
       <td><select class="action-select" data-k="${k}" data-f="action">
         <option value="">—</option>${D.actions.slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'})).map(s=>`<option value="${s}" ${s===action?'selected':''}>${s}</option>`).join('')}
       </select></td>
